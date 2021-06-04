@@ -42,8 +42,8 @@ use Spatie\Ray\Payloads\XmlPayload;
 use Spatie\Ray\Settings\Settings;
 use Spatie\Ray\Settings\SettingsFactory;
 use Spatie\Ray\Support\Counters;
-use Spatie\Ray\Support\RateLimiter;
 use Spatie\Ray\Support\Limiters;
+use Spatie\Ray\Support\RateLimiter;
 use Symfony\Component\Stopwatch\Stopwatch;
 use Throwable;
 
