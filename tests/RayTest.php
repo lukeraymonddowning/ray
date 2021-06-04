@@ -633,7 +633,7 @@ class RayTest extends TestCase
     /** @test */
     public function it_can_send_a_carbon_payload()
     {
-        TestTime::freeze('Y-m-d H:i:s', '2020-01-01 00:00:00');
+        $frozenTime = TestTime::freeze('Y-m-d H:i:s', '2020-01-01 00:00:00');
 
         $carbon = new Carbon();
 
@@ -642,9 +642,9 @@ class RayTest extends TestCase
         $this->assertCount(1, $this->client->sentPayloads());
 
         $payload = $this->client->sentPayloads()[0];
-        $this->assertEquals('2020-01-01 00:00:00', $payload['payloads'][0]['content']['formatted']);
-        $this->assertEquals('1577836800', $payload['payloads'][0]['content']['timestamp']);
-        $this->assertEquals('UTC', $payload['payloads'][0]['content']['timezone']);
+        $this->assertEquals($frozenTime, $payload['payloads'][0]['content']['formatted']);
+        $this->assertEquals($frozenTime->getTimestamp(), $payload['payloads'][0]['content']['timestamp']);
+        $this->assertEquals(date_default_timezone_get(), $payload['payloads'][0]['content']['timezone']);
     }
 
     /** @test */
@@ -709,6 +709,19 @@ class RayTest extends TestCase
     {
         $this->ray->html('<strong>test</strong>');
 
+        $this->assertMatchesOsSafeSnapshot($this->client->sentPayloads());
+    }
+
+    /** @test */
+    public function it_sends_a_text_payload()
+    {
+        $this->ray->text('text string');
+        $this->ray->text('another   <strong>text</strong>' . PHP_EOL . '  string');
+
+        $lastPayload = $this->client->sentPayloads()[1]['payloads'][0];
+
+        $this->assertStringContainsString('&nbsp;&nbsp;&nbsp;&lt;strong&gt;', $lastPayload['content']['content']);
+        $this->assertStringContainsString('<br>', $lastPayload['content']['content']);
         $this->assertMatchesOsSafeSnapshot($this->client->sentPayloads());
     }
 
@@ -917,6 +930,48 @@ class RayTest extends TestCase
         $this->assertCount(2, $this->client->sentPayloads());
 
         $this->assertSame('Rate limit has been reached...', $this->client->sentPayloads()[1]['payloads'][0]['content']['content']);
+    }
+
+    /** @test */
+    public function it_can_limit_the_number_of_payloads_sent_from_a_loop()
+    {
+        $limit = 5;
+
+        for ($i = 0; $i < 10; $i++) {
+            $this->getNewRay()->limit($limit)->send("limited loop iteration $i");
+        }
+
+        $this->assertCount($limit, $this->client->sentPayloads());
+    }
+
+    /** @test */
+    public function it_only_limits_the_number_of_payloads_sent_from_the_line_that_calls_limit()
+    {
+        $limit = 5;
+        $iterations = 10;
+
+        for ($i = 0; $i < $iterations; $i++) {
+            $this->getNewRay()->limit($limit)->send("limited loop iteration $i");
+            $this->getNewRay()->send("unlimited loop iteration $i");
+        }
+
+        $this->assertCount($limit + $iterations, $this->client->sentPayloads());
+    }
+
+    /** @test */
+    public function it_can_handle_multiple_consecutive_calls_to_limit()
+    {
+        $limit = 2;
+
+        for ($i = 0; $i < 10; $i++) {
+            $this->getNewRay()->limit($limit)
+                ->send("limited loop A iteration $i");
+
+            $this->getNewRay()->limit($limit)
+                ->send("limited loop B iteration $i");
+        }
+
+        $this->assertMatchesOsSafeSnapshot($this->client->sentPayloads());
     }
 
     protected function getNewRay(): Ray
